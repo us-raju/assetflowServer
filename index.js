@@ -23,13 +23,28 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
+    const database = client.db("AssetFlowUser");
+    const packageCollection = database.collection("subcriptionPackage");
+    const userCollection = database.collection("user");
+
     // subcription package related apis here
     app.get("/subcriptionPackage", async (req, res) => {
-      const database = client.db("AssetFlowUser");
-      const packageCollection = database.collection("subcriptionPackage");
       const result = await packageCollection.find().toArray();
       res.send(result);
     });
+
+    // user related apis
+    app.post("/user", async (req, res) => {
+      const userData = req.body;
+      const newUser = {
+        ...userData,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      const result = await userCollection.insertOne(newUser);
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
