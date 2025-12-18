@@ -45,6 +45,18 @@ async function run() {
       res.send(result);
     });
 
+    // login related apis
+
+    app.post("/login", async (req, res) => {
+      const { email } = req.body;
+      const user =await userCollection.findOne({ email });
+      if (!user) {
+        return res.status(404).send({
+          message: "User not registered",
+        });
+      }
+      res.send(user);
+    });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
