@@ -26,6 +26,7 @@ async function run() {
     const database = client.db("AssetFlowUser");
     const packageCollection = database.collection("subcriptionPackage");
     const userCollection = database.collection("user");
+    const assetCollection = database.collection("asset");
 
     // subcription package related apis here
     app.get("/subcriptionPackage", async (req, res) => {
@@ -36,6 +37,13 @@ async function run() {
     // user related apis
     app.post("/user", async (req, res) => {
       const userData = req.body;
+      const { email } = req.body;
+      const existingUser = await userCollection.findOne({ email });
+      if (existingUser) {
+        return res.status(400).send({
+          message: "User already exists with this email",
+        });
+      }
       const newUser = {
         ...userData,
         createdAt: new Date(),
@@ -49,7 +57,7 @@ async function run() {
 
     app.post("/login", async (req, res) => {
       const { email } = req.body;
-      const user =await userCollection.findOne({ email });
+      const user = await userCollection.findOne({ email });
       if (!user) {
         return res.status(404).send({
           message: "User not registered",
@@ -57,6 +65,15 @@ async function run() {
       }
       res.send(user);
     });
+
+    // asset related apis
+    app.post("/asset", async (req, res) => {
+      const assetInfo = req.body;
+      const result = await assetCollection.insertOne(assetInfo);
+      res.send(result);
+      console.log(assetInfo);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
