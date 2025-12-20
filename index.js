@@ -71,7 +71,11 @@ async function run() {
       const assetInfo = req.body;
       const result = await assetCollection.insertOne(assetInfo);
       res.send(result);
-      console.log(assetInfo);
+    });
+
+    app.get("/asset", async (req, res) => {
+      const result = await assetCollection.find().toArray();
+      res.send(result);
     });
 
     // Send a ping to confirm a successful connection
