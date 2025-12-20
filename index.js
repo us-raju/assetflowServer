@@ -1,7 +1,7 @@
 const express = require("express");
 const app = express();
 const cors = require("cors");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.port || 3000;
 require("dotenv").config();
 
@@ -75,6 +75,17 @@ async function run() {
 
     app.get("/asset", async (req, res) => {
       const result = await assetCollection.find().toArray();
+      res.send(result);
+    });
+
+    app.patch("/asset/:id", async (req, res) => {
+      const productId = req.params.id;
+      const updatedData = req.body;
+      const query = { _id: new ObjectId(productId) };
+      const update = {
+        $set:updatedData,
+      };
+      const result = await assetCollection.updateOne(query, update);
       res.send(result);
     });
 
