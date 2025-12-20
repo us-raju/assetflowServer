@@ -83,12 +83,18 @@ async function run() {
       const updatedData = req.body;
       const query = { _id: new ObjectId(productId) };
       const update = {
-        $set:updatedData,
+        $set: updatedData,
       };
       const result = await assetCollection.updateOne(query, update);
       res.send(result);
     });
 
+    app.delete("/asset/:id", async (req, res) => {
+      const productId = req.params.id;
+      const query = { _id: new ObjectId(productId) };
+      const result = await assetCollection.deleteOne(query);
+      res.send(result);
+    });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
