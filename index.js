@@ -108,6 +108,17 @@ async function run() {
       const result = await requestCollection.insertOne(requestData);
       res.send(result);
     });
+
+    app.get("/request", async (req, res) => {
+      const email = req.query.email;
+      const result = await requestCollection
+        .find({
+          hrEmail: email,
+          requestStatus: "Pending",
+        })
+        .toArray();
+      res.send(result);
+    });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
