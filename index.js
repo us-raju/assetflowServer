@@ -27,6 +27,7 @@ async function run() {
     const packageCollection = database.collection("subcriptionPackage");
     const userCollection = database.collection("user");
     const assetCollection = database.collection("asset");
+    const requestCollection = database.collection("request");
 
     // subcription package related apis here
     app.get("/subcriptionPackage", async (req, res) => {
@@ -50,6 +51,12 @@ async function run() {
         updatedAt: new Date(),
       };
       const result = await userCollection.insertOne(newUser);
+      res.send({ result });
+    });
+
+    app.get("/user/:email", async (req, res) => {
+      const email = req.params.email;
+      const result = await userCollection.findOne({ email });
       res.send(result);
     });
 
@@ -93,6 +100,12 @@ async function run() {
       const productId = req.params.id;
       const query = { _id: new ObjectId(productId) };
       const result = await assetCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    app.post("/request", async (req, res) => {
+      const requestData = req.body;
+      const result = await requestCollection.insertOne(requestData);
       res.send(result);
     });
     // Send a ping to confirm a successful connection
