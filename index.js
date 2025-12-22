@@ -28,6 +28,10 @@ async function run() {
     const userCollection = database.collection("user");
     const assetCollection = database.collection("asset");
     const requestCollection = database.collection("request");
+    const assetAssginCollection = database.collection("assetAssgin");
+    const employeeAffiliationsCollection = database.collection(
+      "employeeAffiliations"
+    );
 
     // subcription package related apis here
     app.get("/subcriptionPackage", async (req, res) => {
@@ -119,6 +123,94 @@ async function run() {
         .toArray();
       res.send(result);
     });
+
+    app.post("/request/:id", async (req, res) => {
+      const requestId = req.params.id;
+      const { assetId } = req.body;
+      const query = { _id: new ObjectId(requestId) };
+      // request
+      const request = await requestCollection.findOne(query);
+
+      if (!request) {
+        return res.status(404).send({ message: "Request not found" });
+      }
+
+      const asset = await assetCollection.findOne({
+        _id: new ObjectId(assetId),
+      });
+      if (!asset) {
+        return res.status(404).send({ message: "Asset not found" });
+      }
+      if (asset.productQuantity <= 0) {
+        return res.status(400).send({ message: "Asset stock out" });
+      }
+
+      if (request.requestStatus === "approved") {
+        return res.status(400).send({ message: "Request already approved" });
+      }
+      // assetAssign
+      const result = await assetAssginCollection.insertOne({
+        assetId: asset._id,
+        assetName: asset.productName,
+        assetImage: asset.productImage,
+        assetType: asset.productType,
+        employeeEmail: request.requesterEmail,
+        employeeName: request.requesterName,
+        hrEmail: request.hrEmail,
+        companyName: request.companyName,
+        assignmentDate: new Date(),
+        returnDate: null,
+        status: "assigned",
+      });
+
+      // asset quantity
+      const quantityUpdate = await assetCollection.updateOne(
+        { _id: asset._id },
+        { $inc: { productQuantity: -1 } }
+      );
+
+      // request approve
+
+      await requestCollection.updateOne(
+        { _id: new ObjectId(requestId) },
+        { $set: { requestStatus: "approved" } }
+      );
+
+      // employee affilitation existing checking
+
+      const exists = await employeeAffiliationsCollection.findOne({
+        employeeEmail: request.requesterEmail,
+        hrEmail: request.hrEmail,
+      });
+
+      if (!exists) {
+        await employeeAffiliationsCollection.insertOne({
+          employeeEmail: request.requesterEmail,
+          employeeName: request.requesterName,
+          hrEmail: request.hrEmail,
+          companyName: request.companyName,
+          companyLogo: request.companyLogo,
+          affiliationDate: new Date(),
+          status: "active",
+        });
+      }
+      // const result = await requestCollection.updateOne(query, update);
+      res.send(result);
+    });
+
+    app.patch("/request/:id", async (req, res) => {
+      const id = req.params.id;
+      const updatedData = req.body;
+      const query = { _id: new ObjectId(id) };
+      const update = {
+        $set: updatedData,
+      };
+      const result = requestCollection.updateOne(query, update);
+      res.send(result);
+    });
+
+    // collection aggreation
+    app;
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
