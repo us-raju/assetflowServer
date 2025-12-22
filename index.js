@@ -210,6 +210,72 @@ async function run() {
     });
 
     // collection aggreation
+
+    app.get("/myemployee", async (req, res) => {
+      try {
+        const email = req.query.email;
+        const companyName = req.query.companyName;
+
+        const employees = await assetAssginCollection
+          .aggregate([
+            { $match: { hrEmail: email, companyName: companyName } },
+            {
+              $lookup: {
+                from: "user",
+                localField: "employeeEmail",
+                foreignField: "email",
+                as: "employeeInfo",
+              },
+            },
+            {
+              $lookup: {
+                from: "employeeAffiliations",
+                localField: "employeeEmail",
+                foreignField: "employeeEmail",
+                as: "affiliation",
+              },
+            },
+            { $unwind: "$affiliation" },
+            { $match: { "affiliation.status": "active" } },
+            {
+              $group: {
+                _id: "$employeeEmail",
+                employeeName: { $first: "$employeeName" },
+                EmployeeImage: {
+                  $first: { $arrayElemAt: ["$employeeInfo.photoURL", 0] },
+                },
+                JoinedDate: { $first: "$assignmentDate" },
+                AssetCount: { $sum: 1 },
+                // Assets: {
+                //   $push: {
+                //     assignDate: "$assignmentDate",
+                //     assetName: "$assetName",
+                //   },
+                // },
+              },
+            },
+            {
+              $project: {
+                _id: 0,
+                employeeEmail: "$_id",
+                employeeName: 1,
+                EmployeeImage: 1,
+                JoinedDate: 1,
+                // Assets: 1,
+                AssetCount: 1,
+                // AssetCount: { $size: "$Assets" },
+              },
+            },
+          ])
+          .toArray();
+
+        res.send(employees);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
+    });
+
     app;
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
