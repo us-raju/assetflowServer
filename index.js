@@ -45,9 +45,7 @@ async function run() {
       const { email } = req.body;
       const existingUser = await userCollection.findOne({ email });
       if (existingUser) {
-        return res.status(400).send({
-          message: "User already exists with this email",
-        });
+        return res.send(existingUser)
       }
       const newUser = {
         ...userData,
@@ -56,6 +54,16 @@ async function run() {
       };
       const result = await userCollection.insertOne(newUser);
       res.send({ result });
+    });
+
+    app.patch("/user/:email", async (req, res) => {
+      const email = req.params.email;
+      const updatedData = req.body;
+      const update = {
+        $set: updatedData,
+      };
+      const result = await userCollection.updateOne({ email }, update);
+      res.send(result);
     });
 
     app.get("/user/:email", async (req, res) => {
@@ -135,6 +143,24 @@ async function run() {
         return res.status(404).send({ message: "Request not found" });
       }
 
+      //  employee limit check
+      const used = await employeeAffiliationsCollection.countDocuments({
+        hrEmail: request.hrEmail,
+        status: "active",
+      });
+
+      const Limit = await userCollection.findOne({
+        hrEmail: request.hrEmail,
+      });
+
+      const max = Number(Limit?.employeeLimit) || 5;
+
+      if (used >= max) {
+        return res.status(403).send({
+          message: "Employee limit reached. Upgrade your package.",
+        });
+      }
+
       const asset = await assetCollection.findOne({
         _id: new ObjectId(assetId),
       });
@@ -193,7 +219,12 @@ async function run() {
           affiliationDate: new Date(),
           status: "active",
         });
+        await userCollection.updateOne(
+          { email: request.hrEmail },
+          { $inc: { currentEmployees: 1 } }
+        );
       }
+
       // const result = await requestCollection.updateOne(query, update);
       res.send(result);
     });
@@ -246,12 +277,6 @@ async function run() {
                 },
                 JoinedDate: { $first: "$assignmentDate" },
                 AssetCount: { $sum: 1 },
-                // Assets: {
-                //   $push: {
-                //     assignDate: "$assignmentDate",
-                //     assetName: "$assetName",
-                //   },
-                // },
               },
             },
             {
@@ -261,15 +286,45 @@ async function run() {
                 employeeName: 1,
                 EmployeeImage: 1,
                 JoinedDate: 1,
-                // Assets: 1,
+
                 AssetCount: 1,
-                // AssetCount: { $size: "$Assets" },
               },
             },
           ])
           .toArray();
 
         res.send(employees);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
+    });
+
+    // employeelimit releted apis
+
+    app.get("/employee-usage", async (req, res) => {
+      try {
+        const email = req.query.email;
+        if (!email) {
+          return res.status(400).send({ message: "Email required" });
+        }
+
+        const used = await employeeAffiliationsCollection.countDocuments({
+          hrEmail: email,
+          status: "active",
+        });
+
+        const LIMIT = await userCollection.findOne({
+          hrEmail: email,
+        });
+
+        const max = LIMIT?.employeeLimit || 5;
+
+        res.send({
+          used,
+          max,
+          remaining: Math.max(max - used, 0),
+        });
       } catch (err) {
         console.error(err);
         res.status(500).send({ message: "Internal Server Error" });
