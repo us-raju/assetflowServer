@@ -18,7 +18,7 @@ app.use(express.json());
 
 const verifyToken = async (req, res, next) => {
   const token = req.headers.authorization;
-  console.log(token)
+  console.log(token);
   if (!token) {
     return res.status(401).send({ message: `unauthorized access` });
   }
@@ -26,7 +26,7 @@ const verifyToken = async (req, res, next) => {
     const tokenId = token.split(" ")[1];
     const decoded = await admin.auth().verifyIdToken(tokenId);
     req.decoded_email = decoded.email;
-    console.log(decoded)
+    console.log(decoded);
     next();
   } catch (err) {
     return res.status(401).send({ message: `unauthorized access` });
@@ -118,14 +118,18 @@ async function run() {
 
     app.get("/asset/:email", verifyToken, async (req, res) => {
       const hrEmail = req.params.email;
-      if(hrEmail !== req.decoded_email){
-        return res.status(403).send({message:"forbidden access"})
+      if (hrEmail !== req.decoded_email) {
+        return res.status(403).send({ message: "forbidden access" });
       }
-      const result = await assetCollection.find({hrEmail }).toArray();
+      const result = await assetCollection.find({ hrEmail }).toArray();
+      res.send(result);
+    });
+    app.get("/asset/", async (req, res) => {
+      const result = await assetCollection.find().toArray();
       res.send(result);
     });
 
-    app.patch("/asset/:id", async (req, res) => {
+    app.patch("/asset/:id", verifyToken, async (req, res) => {
       const productId = req.params.id;
       const updatedData = req.body;
       const query = { _id: new ObjectId(productId) };
@@ -136,7 +140,7 @@ async function run() {
       res.send(result);
     });
 
-    app.delete("/asset/:id", async (req, res) => {
+    app.delete("/asset/:id", verifyToken, async (req, res) => {
       const productId = req.params.id;
       const query = { _id: new ObjectId(productId) };
       const result = await assetCollection.deleteOne(query);
@@ -256,112 +260,6 @@ async function run() {
       // const result = await requestCollection.updateOne(query, update);
       res.send(result);
     });
-    //     app.post("/request/:id", async (req, res) => {
-    //   try {
-    //     const requestId = req.params.id;
-    //     const { assetId } = req.body;
-
-    //     // 1️⃣ Find request
-    //     const request = await requestCollection.findOne({
-    //       _id: new ObjectId(requestId),
-    //     });
-
-    //     if (!request) {
-    //       return res.status(404).send({ message: "Request not found" });
-    //     }
-
-    //     if (request.requestStatus === "approved") {
-    //       return res.status(400).send({ message: "Already approved" });
-    //     }
-
-    //     // 2️⃣ Find asset
-    //     const asset = await assetCollection.findOne({
-    //       _id: new ObjectId(assetId),
-    //     });
-
-    //     if (!asset || asset.productQuantity <= 0) {
-    //       return res.status(400).send({ message: "Asset not available" });
-    //     }
-
-    //     // 3️⃣ Count active employees (CORRECT FIELD)
-    //     const used = await employeeAffiliationsCollection.countDocuments({
-    //       hrEmail: request.hrEmail,
-    //       status: "active",
-    //     });
-
-    //     // 4️⃣ Get HR user (CORRECT QUERY)
-    //     const hrUser = await userCollection.findOne({
-    //       email: request.hrEmail,
-    //     });
-
-    //     const maxLimit = Number(hrUser?.employeeLimit || 5);
-
-    //     if (used >= maxLimit) {
-    //       return res.status(403).send({
-    //         message: "Employee limit reached",
-    //       });
-    //     }
-
-    //     // 5️⃣ Assign asset
-    //     const assignResult = await assetAssginCollection.insertOne({
-    //       assetId: asset._id,
-    //       assetName: asset.productName,
-    //       assetImage: asset.productImage,
-    //       assetType: asset.productType,
-    //       employeeEmail: request.requesterEmail,
-    //       employeeName: request.requesterName,
-    //       hrEmail: request.hrEmail,
-    //       companyName: request.companyName,
-    //       assignmentDate: new Date(),
-    //       returnDate: null,
-    //       status: "assigned",
-    //     });
-
-    //     // 6️⃣ Reduce asset quantity
-    //     await assetCollection.updateOne(
-    //       { _id: asset._id },
-    //       { $inc: { productQuantity: -1 } }
-    //     );
-
-    //     // 7️⃣ Approve request
-    //     await requestCollection.updateOne(
-    //       { _id: new ObjectId(requestId) },
-    //       { $set: { requestStatus: "approved" } }
-    //     );
-
-    //     // 8️⃣ Employee affiliation (only once)
-    //     const exists = await employeeAffiliationsCollection.findOne({
-    //       employeeEmail: request.requesterEmail,
-    //       hrEmail: request.hrEmail,
-    //     });
-
-    //     if (!exists) {
-    //       await employeeAffiliationsCollection.insertOne({
-    //         employeeEmail: request.requesterEmail,
-    //         employeeName: request.requesterName,
-    //         hrEmail: request.hrEmail,
-    //         companyName: request.companyName,
-    //         companyLogo: request.companyLogo,
-    //         affiliationDate: new Date(),
-    //         status: "active",
-    //       });
-
-    //       await userCollection.updateOne(
-    //         { email: request.hrEmail },
-    //         { $inc: { currentEmployees: 1 } }
-    //       );
-    //     }
-
-    //     res.send({
-    //       success: true,
-    //       message: "Request approved successfully",
-    //       assignResult,
-    //     });
-    //   } catch (err) {
-    //     console.error("REQUEST APPROVE ERROR:", err);
-    //     res.status(500).send({ message: "Server error" });
-    //   }
-    // });
 
     app.patch("/request/:id", async (req, res) => {
       const id = req.params.id;
@@ -463,6 +361,14 @@ async function run() {
         console.error(err);
         res.status(500).send({ message: "Internal Server Error" });
       }
+    });
+
+    // asset assigned apis
+    app.get("/assetAssgin",async (req, res) => {
+      const email = req.query.email;
+      const query = { employeeEmail: email };
+      const result =await assetAssginCollection.find(query).toArray();
+      res.send(result);
     });
 
     app;
