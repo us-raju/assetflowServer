@@ -118,11 +118,18 @@ async function run() {
 
     app.get("/asset/:email", verifyToken, async (req, res) => {
       const hrEmail = req.params.email;
+      const { limit = 0, skip = 0 } = req.query;
       if (hrEmail !== req.decoded_email) {
         return res.status(403).send({ message: "forbidden access" });
       }
-      const result = await assetCollection.find({ hrEmail }).toArray();
-      res.send(result);
+      console.log(limit, skip);
+      const result = await assetCollection
+        .find({ hrEmail })
+        .limit(Number(limit))
+        .skip(Number(skip))
+        .toArray();
+      const totalCount = await assetCollection.countDocuments({ hrEmail });
+      res.send({assets: result, totalCount });
     });
     app.get("/asset/", async (req, res) => {
       const result = await assetCollection.find().toArray();
