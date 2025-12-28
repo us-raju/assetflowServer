@@ -364,10 +364,101 @@ async function run() {
     });
 
     // asset assigned apis
-    app.get("/assetAssgin",async (req, res) => {
+    app.get("/assetAssgin", async (req, res) => {
       const email = req.query.email;
       const query = { employeeEmail: email };
-      const result =await assetAssginCollection.find(query).toArray();
+      const result = await assetAssginCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    // team releted api
+    app.get("/my-team", async (req, res) => {
+      const email = req.query.email;
+      if (!email) {
+        return res.status(400).send({ message: "Email Undefined" });
+      }
+      const result = await employeeAffiliationsCollection
+        .aggregate([
+          {
+            $match: {
+              employeeEmail: email,
+              status: "active",
+            },
+          },
+
+          {
+            $lookup: {
+              from: "employeeAffiliations",
+              localField: "hrEmail",
+              foreignField: "hrEmail",
+              as: "teamMembers",
+            },
+          },
+
+          { $unwind: "$teamMembers" },
+
+          {
+            $match: {
+              "teamMembers.status": "active",
+            },
+          },
+
+          {
+            $lookup: {
+              from: "user",
+              localField: "teamMembers.employeeEmail",
+              foreignField: "email",
+              as: "userInfo",
+            },
+          },
+
+          {
+            $unwind: {
+              path: "$userInfo",
+              preserveNullAndEmptyArrays: true,
+            },
+          },
+
+          {
+            $group: {
+              _id: {
+                companyName: "$teamMembers.companyName",
+                employeeEmail: "$teamMembers.employeeEmail",
+              },
+              employeeName: { $first: "$teamMembers.employeeName" },
+              photoURL: { $first: "$userInfo.photoURL" },
+              dateOfBirth: { $first: "$userInfo.dateOfBirth" },
+              role: { $first: "$userInfo.role" },
+            },
+          },
+
+          {
+            $group: {
+              _id: "$_id.companyName",
+              members: {
+                $push: {
+                  employeeEmail: "$_id.employeeEmail",
+                  employeeName: "$employeeName",
+                  photoURL: "$photoURL",
+                  dateOfBirth: "$dateOfBirth",
+                  role: "$role",
+                },
+              },
+            },
+          },
+
+          {
+            $project: {
+              _id: 0,
+              companyName: "$_id",
+              members: 1,
+            },
+          },
+        ])
+        .toArray();
+
+      res.send(result);
+
       res.send(result);
     });
 
@@ -387,5 +478,5 @@ app.get("/", (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log("server is running port:6000");
+  console.log("server is running port:3000");
 });
