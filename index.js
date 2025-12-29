@@ -5,8 +5,10 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.port || 3000;
 require("dotenv").config();
 const admin = require("firebase-admin");
+const { UserInfo } = require("firebase-admin/auth");
 
 const serviceAccount = require(process.env.FIREBASE_TOKEN);
+const stripe = require("stripe")(process.env.STRIPE_SECRET);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -56,6 +58,7 @@ async function run() {
     const employeeAffiliationsCollection = database.collection(
       "employeeAffiliations"
     );
+    const paymentCollection = database.collection("payment");
 
     // subcription package related apis here
     app.get("/subcriptionPackage", async (req, res) => {
@@ -129,7 +132,7 @@ async function run() {
         .skip(Number(skip))
         .toArray();
       const totalCount = await assetCollection.countDocuments({ hrEmail });
-      res.send({assets: result, totalCount });
+      res.send({ assets: result, totalCount });
     });
     app.get("/asset/", async (req, res) => {
       const result = await assetCollection.find().toArray();
@@ -468,7 +471,78 @@ async function run() {
 
       res.send(result);
     });
+    //  api for payment
 
+    app.post("/create-checkout-session", async (req, res) => {
+      const paymentInfo = req.body;
+      const amount = parseInt(paymentInfo.price) * 100;
+      const session = await stripe.checkout.sessions.create({
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              unit_amount: amount,
+              product_data: {
+                name: paymentInfo.packageName,
+                description: `Emplyoee Increase up to ${paymentInfo.employeeLimit}`,
+              },
+            },
+            quantity: 1,
+          },
+        ],
+        metadata: {
+          assetId: paymentInfo.assetId,
+          hrEmail: paymentInfo.hrEmail,
+          employeeLimit: String(paymentInfo.employeeLimit),
+          packageName: paymentInfo.packageName,
+        },
+        mode: "payment",
+        success_url: `${process.env.SITE_DOMAIN}/hr_dashbord/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.SITE_DOMAIN}/hr_dashbord/payment-cancelled`,
+      });
+      res.send({ url: session.url });
+    });
+
+    app.get("/payment-seccess", async (req, res) => {
+      const sessionId = req.query.session_id;
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      const transactionId = session.payment_intent;
+      const query = { transactionId: transactionId };
+      const paymentExist = await paymentCollection.findOne(query);
+
+      const paymnetDetails = {
+        hrEmail: session.metadata.hrEmail,
+        packageName: session.metadata.packageName,
+        employeeLimit: Number(session.metadata.employeeLimit),
+        amount: Number(session.amount_total / 100),
+        transactionId: session.payment_intent,
+        paymentDate: new Date(),
+        status: session.status,
+      };
+      if (paymentExist) {
+        return res.send({
+          message: "This payment already exist",
+          data: paymnetDetails,
+        });
+      }
+      const result = await paymentCollection.insertOne(paymnetDetails);
+      const email = session.metadata.hrEmail;
+      const upadateDoc = {
+        $set: {
+          subscription: session.metadata.packageName,
+          packageLimit: Number(session.metadata.employeeLimit),
+          updatedAt: new Date(),
+        },
+      };
+      await userCollection.updateOne({ email }, upadateDoc);
+      res.send({ seccess: true, data: paymnetDetails });
+    });
+
+    app.get("/payment", verifyToken, async (req, res) => {
+      const query = req.query.email;
+      const result = await paymentCollection.find(query).toArray();
+      res.send(result);
+    });
     app;
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
