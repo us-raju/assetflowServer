@@ -7,8 +7,12 @@ require("dotenv").config();
 const admin = require("firebase-admin");
 const { UserInfo } = require("firebase-admin/auth");
 
-const serviceAccount = require(process.env.FIREBASE_TOKEN);
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
+
+const decoded = Buffer.from(process.env.FIREBASE_TOKEN, "base64").toString(
+  "utf8",
+);
+const serviceAccount = JSON.parse(decoded);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -56,7 +60,7 @@ async function run() {
     const requestCollection = database.collection("request");
     const assetAssginCollection = database.collection("assetAssgin");
     const employeeAffiliationsCollection = database.collection(
-      "employeeAffiliations"
+      "employeeAffiliations",
     );
     const paymentCollection = database.collection("payment");
 
@@ -234,14 +238,14 @@ async function run() {
       // asset quantity
       const quantityUpdate = await assetCollection.updateOne(
         { _id: asset._id },
-        { $inc: { productQuantity: -1 } }
+        { $inc: { productQuantity: -1 } },
       );
 
       // request approve
 
       await requestCollection.updateOne(
         { _id: new ObjectId(requestId) },
-        { $set: { requestStatus: "approved" } }
+        { $set: { requestStatus: "approved" } },
       );
 
       // employee affilitation existing checking
@@ -263,7 +267,7 @@ async function run() {
         });
         await userCollection.updateOne(
           { email: request.hrEmail },
-          { $inc: { currentEmployees: 1 } }
+          { $inc: { currentEmployees: 1 } },
         );
       }
 
@@ -347,6 +351,7 @@ async function run() {
     app.get("/employee-usage", async (req, res) => {
       try {
         const email = req.query.email;
+        console.log(email);
         if (!email) {
           return res.status(400).send({ message: "Email required" });
         }
@@ -355,12 +360,15 @@ async function run() {
           hrEmail: email,
           status: "active",
         });
+        console.log("use user",used)
 
         const LIMIT = await userCollection.findOne({
-          hrEmail: email,
+          email,
         });
+        console.log("limit is", LIMIT);
 
-        const max = LIMIT?.employeeLimit || 5;
+        const max = LIMIT?.packageLimit || 5;
+        console.log(max)
 
         res.send({
           used,
@@ -545,10 +553,7 @@ async function run() {
     });
     app;
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // await client.db("admin").command({ ping: 1 });
   } finally {
   }
 }
